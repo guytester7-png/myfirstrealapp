@@ -1,38 +1,59 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
-
-// modify the interface with any CRUD methods
-// you might need
+import { db } from "./db";
+import { courses, purchases, type InsertCourse, type InsertPurchase, type Course, type Purchase } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  getCourses(): Promise<Course[]>;
+  getCourse(id: number): Promise<Course | undefined>;
+  createPurchase(purchase: InsertPurchase): Promise<Purchase>;
+  getPurchases(userId: string): Promise<Purchase[]>;
+  seedCourses(): Promise<void>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
+export class DatabaseStorage implements IStorage {
+  async getCourses(): Promise<Course[]> {
+    return await db.select().from(courses);
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async getCourse(id: number): Promise<Course | undefined> {
+    const [course] = await db.select().from(courses).where(eq(courses.id, id));
+    return course;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+  async createPurchase(insertPurchase: InsertPurchase): Promise<Purchase> {
+    const [purchase] = await db.insert(purchases).values(insertPurchase).returning();
+    return purchase;
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  async getPurchases(userId: string): Promise<Purchase[]> {
+    return await db.select().from(purchases).where(eq(purchases.userId, userId));
+  }
+
+  async seedCourses(): Promise<void> {
+    const existing = await this.getCourses();
+    if (existing.length === 0) {
+      await db.insert(courses).values([
+        {
+          title: "Mathematics Masterclass",
+          description: "Master advanced calculus and algebra with this comprehensive course.",
+          price: 2500,
+          paddleProductId: "pri_01k5rc29qvp5geryhewd7we5d9",
+        },
+        {
+          title: "Science Explorer",
+          description: "Explore the wonders of physics, chemistry, and biology.",
+          price: 2500,
+          paddleProductId: "pri_01kgz68g5pkmgra6vszk0kk434",
+        },
+        {
+          title: "Arabic Language",
+          description: "Learn to read, write, and speak Arabic fluently.",
+          price: 2500,
+          paddleProductId: "pri_01kgz6ab2dwm7eqs528hh63c9f",
+        },
+      ]);
+    }
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
